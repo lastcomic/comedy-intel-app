@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { AGENTS, AGENT_LIST } from './agents';
 import { callAgent, routeRequest } from './api';
-import { loadShows, saveShows, formatShowsForAgents } from './shows';
+import { loadShows, saveShows, formatShowsForAgents, extractTextFromPDF, parseShowsWithAI } from './shows';
 import './App.css';
 
 const APP_PASSWORD = 'Norchester943';
@@ -21,6 +21,10 @@ function App() {
   const [showsPanel, setShowsPanel] = useState(false);
   const [editingShow, setEditingShow] = useState(null);
   const [showForm, setShowForm] = useState(EMPTY_SHOW);
+  const [importMode, setImportMode] = useState(false);
+  const [importText, setImportText] = useState('');
+  const [importStatus, setImportStatus] = useState('');
+  const fileInputRef = useRef(null);
 
   const [selectedAgent, setSelectedAgent] = useState('DISPATCH');
   const [messages, setMessages] = useState([]);
@@ -81,6 +85,54 @@ function App() {
   const cancelEdit = () => {
     setEditingShow(null);
     setShowForm(EMPTY_SHOW);
+  };
+
+  const handleImportPaste = async () => {
+    if (!importText.trim() || !apiKey) return;
+    setImportStatus('Parsing shows...');
+    try {
+      const parsed = await parseShowsWithAI(apiKey, importText);
+      if (parsed.length === 0) {
+        setImportStatus('No shows found in the text.');
+        return;
+      }
+      const updated = [...shows, ...parsed].sort((a, b) => new Date(a.date) - new Date(b.date));
+      setShows(updated);
+      saveShows(updated);
+      setImportStatus(`Added ${parsed.length} show${parsed.length > 1 ? 's' : ''}.`);
+      setImportText('');
+      setTimeout(() => { setImportStatus(''); setImportMode(false); }, 2000);
+    } catch (err) {
+      setImportStatus(`Error: ${err.message}`);
+    }
+  };
+
+  const handleFileUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file || !apiKey) return;
+    setImportStatus('Reading file...');
+    try {
+      let text;
+      if (file.type === 'application/pdf') {
+        text = await extractTextFromPDF(file);
+      } else {
+        text = await file.text();
+      }
+      setImportStatus('Parsing shows...');
+      const parsed = await parseShowsWithAI(apiKey, text);
+      if (parsed.length === 0) {
+        setImportStatus('No shows found in file.');
+        return;
+      }
+      const updated = [...shows, ...parsed].sort((a, b) => new Date(a.date) - new Date(b.date));
+      setShows(updated);
+      saveShows(updated);
+      setImportStatus(`Added ${parsed.length} show${parsed.length > 1 ? 's' : ''}.`);
+      setTimeout(() => { setImportStatus(''); setImportMode(false); }, 2000);
+    } catch (err) {
+      setImportStatus(`Error: ${err.message}`);
+    }
+    e.target.value = '';
   };
 
   const handleSubmit = async (text) => {
@@ -420,43 +472,79 @@ function App() {
           </div>
 
           <div className="show-form">
-            <div className="show-form-row">
-              <input type="date" value={showForm.date} onChange={e => setShowForm({...showForm, date: e.target.value})} />
-              <input placeholder="Venue" value={showForm.venue} onChange={e => setShowForm({...showForm, venue: e.target.value})} />
+            <div className="import-toggle">
+              <button className={`import-tab ${!importMode ? 'active' : ''}`} onClick={() => setImportMode(false)}>Manual</button>
+              <button className={`import-tab ${importMode ? 'active' : ''}`} onClick={() => setImportMode(true)}>Paste / Upload</button>
             </div>
-            <div className="show-form-row">
-              <input placeholder="City" value={showForm.city} onChange={e => setShowForm({...showForm, city: e.target.value})} />
-              <input placeholder="State" value={showForm.state} onChange={e => setShowForm({...showForm, state: e.target.value})} />
-            </div>
-            <div className="show-form-row">
-              <input placeholder="Show times (e.g. 7pm & 9:30pm)" value={showForm.showTimes} onChange={e => setShowForm({...showForm, showTimes: e.target.value})} />
-              <input placeholder="Ticket link" value={showForm.ticketLink} onChange={e => setShowForm({...showForm, ticketLink: e.target.value})} />
-            </div>
-            <div className="show-form-row">
-              <select value={showForm.dealType} onChange={e => setShowForm({...showForm, dealType: e.target.value})}>
-                <option value="">Deal type...</option>
-                <option value="Guarantee">Guarantee</option>
-                <option value="SOB">Split Over Breakeven</option>
-                <option value="GBOR">Gross Box Office Revenue</option>
-                <option value="Door Deal">Door Deal</option>
-                <option value="Aggregate Bonus">Aggregate Bonus</option>
-                <option value="Travel Buyout">Travel Buyout</option>
-              </select>
-              <input placeholder="Guarantee $" type="number" value={showForm.guarantee} onChange={e => setShowForm({...showForm, guarantee: e.target.value})} />
-            </div>
-            <input className="show-form-full" placeholder="Notes" value={showForm.notes} onChange={e => setShowForm({...showForm, notes: e.target.value})} />
-            <div className="show-form-actions">
-              {editingShow ? (
-                <>
-                  <button className="modal-btn" onClick={updateShow}>Update</button>
-                  <button className="show-cancel-btn" onClick={cancelEdit}>Cancel</button>
-                </>
-              ) : (
-                <button className="modal-btn" onClick={addShow} disabled={!showForm.date || !showForm.venue || !showForm.city}>
-                  Add Show
+
+            {importMode ? (
+              <div className="import-section">
+                <textarea
+                  className="import-textarea"
+                  placeholder="Paste your show dates here — any format works. Emails, spreadsheet data, lists, contracts..."
+                  value={importText}
+                  onChange={e => setImportText(e.target.value)}
+                  rows={5}
+                />
+                <div className="show-form-actions">
+                  <button className="modal-btn" onClick={handleImportPaste} disabled={!importText.trim() || importStatus === 'Parsing shows...'}>
+                    {importStatus === 'Parsing shows...' ? 'Parsing...' : 'Parse Shows'}
+                  </button>
+                </div>
+                <div className="import-divider">or</div>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".pdf,.txt,.csv"
+                  onChange={handleFileUpload}
+                  style={{ display: 'none' }}
+                />
+                <button className="upload-btn" onClick={() => fileInputRef.current?.click()} disabled={importStatus === 'Reading file...' || importStatus === 'Parsing shows...'}>
+                  Upload PDF or Text File
                 </button>
-              )}
-            </div>
+                {importStatus && <div className={`import-status ${importStatus.startsWith('Error') ? 'error' : ''}`}>{importStatus}</div>}
+              </div>
+            ) : (
+              <>
+                <div className="show-form-row">
+                  <input type="date" value={showForm.date} onChange={e => setShowForm({...showForm, date: e.target.value})} />
+                  <input placeholder="Venue" value={showForm.venue} onChange={e => setShowForm({...showForm, venue: e.target.value})} />
+                </div>
+                <div className="show-form-row">
+                  <input placeholder="City" value={showForm.city} onChange={e => setShowForm({...showForm, city: e.target.value})} />
+                  <input placeholder="State" value={showForm.state} onChange={e => setShowForm({...showForm, state: e.target.value})} />
+                </div>
+                <div className="show-form-row">
+                  <input placeholder="Show times (e.g. 7pm & 9:30pm)" value={showForm.showTimes} onChange={e => setShowForm({...showForm, showTimes: e.target.value})} />
+                  <input placeholder="Ticket link" value={showForm.ticketLink} onChange={e => setShowForm({...showForm, ticketLink: e.target.value})} />
+                </div>
+                <div className="show-form-row">
+                  <select value={showForm.dealType} onChange={e => setShowForm({...showForm, dealType: e.target.value})}>
+                    <option value="">Deal type...</option>
+                    <option value="Guarantee">Guarantee</option>
+                    <option value="SOB">Split Over Breakeven</option>
+                    <option value="GBOR">Gross Box Office Revenue</option>
+                    <option value="Door Deal">Door Deal</option>
+                    <option value="Aggregate Bonus">Aggregate Bonus</option>
+                    <option value="Travel Buyout">Travel Buyout</option>
+                  </select>
+                  <input placeholder="Guarantee $" type="number" value={showForm.guarantee} onChange={e => setShowForm({...showForm, guarantee: e.target.value})} />
+                </div>
+                <input className="show-form-full" placeholder="Notes" value={showForm.notes} onChange={e => setShowForm({...showForm, notes: e.target.value})} />
+                <div className="show-form-actions">
+                  {editingShow ? (
+                    <>
+                      <button className="modal-btn" onClick={updateShow}>Update</button>
+                      <button className="show-cancel-btn" onClick={cancelEdit}>Cancel</button>
+                    </>
+                  ) : (
+                    <button className="modal-btn" onClick={addShow} disabled={!showForm.date || !showForm.venue || !showForm.city}>
+                      Add Show
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
           </div>
 
           <div className="shows-list">
