@@ -1,9 +1,12 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { AGENTS, AGENT_LIST } from './agents';
 import { callAgent, routeRequest } from './api';
+import { loadShows, saveShows, formatShowsForAgents } from './shows';
 import './App.css';
 
 const APP_PASSWORD = 'Norchester943';
+
+const EMPTY_SHOW = { date: '', venue: '', city: '', state: '', showTimes: '', ticketLink: '', dealType: '', guarantee: '', notes: '' };
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(() => sessionStorage.getItem('heffron_auth') === 'true');
@@ -13,6 +16,11 @@ function App() {
   const [apiKey, setApiKey] = useState(() => localStorage.getItem('heffron_api_key') || '');
   const [showKeyModal, setShowKeyModal] = useState(() => !localStorage.getItem('heffron_api_key'));
   const [keyInput, setKeyInput] = useState('');
+
+  const [shows, setShows] = useState(loadShows);
+  const [showsPanel, setShowsPanel] = useState(false);
+  const [editingShow, setEditingShow] = useState(null);
+  const [showForm, setShowForm] = useState(EMPTY_SHOW);
 
   const [selectedAgent, setSelectedAgent] = useState('DISPATCH');
   const [messages, setMessages] = useState([]);
@@ -38,6 +46,42 @@ function App() {
   const addMessage = useCallback((msg) => {
     setMessages(prev => [...prev, { ...msg, id: Date.now() + Math.random() }]);
   }, []);
+
+  const showContext = formatShowsForAgents(shows);
+
+  const addShow = () => {
+    if (!showForm.date || !showForm.venue || !showForm.city) return;
+    const newShow = { ...showForm, id: Date.now() };
+    const updated = [...shows, newShow].sort((a, b) => new Date(a.date) - new Date(b.date));
+    setShows(updated);
+    saveShows(updated);
+    setShowForm(EMPTY_SHOW);
+    setEditingShow(null);
+  };
+
+  const updateShow = () => {
+    const updated = shows.map(s => s.id === editingShow ? { ...showForm, id: editingShow } : s);
+    setShows(updated);
+    saveShows(updated);
+    setShowForm(EMPTY_SHOW);
+    setEditingShow(null);
+  };
+
+  const deleteShow = (id) => {
+    const updated = shows.filter(s => s.id !== id);
+    setShows(updated);
+    saveShows(updated);
+  };
+
+  const startEdit = (show) => {
+    setEditingShow(show.id);
+    setShowForm({ ...show });
+  };
+
+  const cancelEdit = () => {
+    setEditingShow(null);
+    setShowForm(EMPTY_SHOW);
+  };
 
   const handleSubmit = async (text) => {
     const userText = text || input.trim();
@@ -75,7 +119,7 @@ function App() {
       isThinking: true,
     });
 
-    const routing = await routeRequest(apiKey, userText);
+    const routing = await routeRequest(apiKey, userText, showContext);
 
     // Remove thinking message
     setMessages(prev => prev.filter(m => !m.isThinking));
@@ -123,7 +167,7 @@ function App() {
         isThinking: true,
       });
 
-      const result = await callAgent(apiKey, codename, agentPrompt);
+      const result = await callAgent(apiKey, codename, agentPrompt, showContext);
 
       setMessages(prev => prev.filter(m => !(m.isThinking && m.agent === codename)));
 
@@ -160,7 +204,8 @@ function App() {
       const review = await callAgent(
         apiKey,
         'GATEKEEPER',
-        `Review the following content outputs for brand compliance:\n\n${allContent}`
+        `Review the following content outputs for brand compliance:\n\n${allContent}`,
+        showContext
       );
 
       setMessages(prev => prev.filter(m => !(m.isThinking && m.agent === 'GATEKEEPER')));
@@ -189,7 +234,7 @@ function App() {
       isThinking: true,
     });
 
-    const result = await callAgent(apiKey, codename, userText);
+    const result = await callAgent(apiKey, codename, userText, showContext);
 
     setMessages(prev => prev.filter(m => !(m.isThinking && m.agent === codename)));
     addMessage({ role: 'agent', agent: codename, content: result });
@@ -214,7 +259,8 @@ function App() {
       const review = await callAgent(
         apiKey,
         'GATEKEEPER',
-        `Review the following ${AGENTS[codename].name} output for brand compliance:\n\n${result}`
+        `Review the following ${AGENTS[codename].name} output for brand compliance:\n\n${result}`,
+        showContext
       );
 
       setMessages(prev => prev.filter(m => !(m.isThinking && m.agent === 'GATEKEEPER')));
@@ -358,7 +404,80 @@ function App() {
             </button>
           ))}
         </div>
+        <div className="sidebar-footer">
+          <button className="shows-toggle-btn" onClick={() => setShowsPanel(!showsPanel)}>
+            📅 Shows ({shows.length})
+          </button>
+        </div>
       </aside>
+
+      {/* Shows Panel */}
+      {showsPanel && (
+        <div className="shows-panel">
+          <div className="shows-panel-header">
+            <h2>Show Dates</h2>
+            <button className="shows-close-btn" onClick={() => setShowsPanel(false)}>✕</button>
+          </div>
+
+          <div className="show-form">
+            <div className="show-form-row">
+              <input type="date" value={showForm.date} onChange={e => setShowForm({...showForm, date: e.target.value})} />
+              <input placeholder="Venue" value={showForm.venue} onChange={e => setShowForm({...showForm, venue: e.target.value})} />
+            </div>
+            <div className="show-form-row">
+              <input placeholder="City" value={showForm.city} onChange={e => setShowForm({...showForm, city: e.target.value})} />
+              <input placeholder="State" value={showForm.state} onChange={e => setShowForm({...showForm, state: e.target.value})} />
+            </div>
+            <div className="show-form-row">
+              <input placeholder="Show times (e.g. 7pm & 9:30pm)" value={showForm.showTimes} onChange={e => setShowForm({...showForm, showTimes: e.target.value})} />
+              <input placeholder="Ticket link" value={showForm.ticketLink} onChange={e => setShowForm({...showForm, ticketLink: e.target.value})} />
+            </div>
+            <div className="show-form-row">
+              <select value={showForm.dealType} onChange={e => setShowForm({...showForm, dealType: e.target.value})}>
+                <option value="">Deal type...</option>
+                <option value="Guarantee">Guarantee</option>
+                <option value="SOB">Split Over Breakeven</option>
+                <option value="GBOR">Gross Box Office Revenue</option>
+                <option value="Door Deal">Door Deal</option>
+                <option value="Aggregate Bonus">Aggregate Bonus</option>
+                <option value="Travel Buyout">Travel Buyout</option>
+              </select>
+              <input placeholder="Guarantee $" type="number" value={showForm.guarantee} onChange={e => setShowForm({...showForm, guarantee: e.target.value})} />
+            </div>
+            <input className="show-form-full" placeholder="Notes" value={showForm.notes} onChange={e => setShowForm({...showForm, notes: e.target.value})} />
+            <div className="show-form-actions">
+              {editingShow ? (
+                <>
+                  <button className="modal-btn" onClick={updateShow}>Update</button>
+                  <button className="show-cancel-btn" onClick={cancelEdit}>Cancel</button>
+                </>
+              ) : (
+                <button className="modal-btn" onClick={addShow} disabled={!showForm.date || !showForm.venue || !showForm.city}>
+                  Add Show
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="shows-list">
+            {shows.length === 0 && <div className="shows-empty">No shows added yet.</div>}
+            {shows.sort((a, b) => new Date(a.date) - new Date(b.date)).map(show => (
+              <div key={show.id} className={`show-card ${new Date(show.date) < new Date(new Date().toDateString()) ? 'past' : ''}`}>
+                <div className="show-card-date">{new Date(show.date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</div>
+                <div className="show-card-venue">{show.venue}</div>
+                <div className="show-card-location">{show.city}, {show.state}</div>
+                {show.showTimes && <div className="show-card-detail">{show.showTimes}</div>}
+                {show.dealType && <div className="show-card-detail">{show.dealType}{show.guarantee ? ` — $${Number(show.guarantee).toLocaleString()}` : ''}</div>}
+                {show.notes && <div className="show-card-notes">{show.notes}</div>}
+                <div className="show-card-actions">
+                  <button onClick={() => startEdit(show)}>Edit</button>
+                  <button onClick={() => deleteShow(show.id)}>Delete</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Main Content */}
       <main className="main">

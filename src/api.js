@@ -33,19 +33,23 @@ async function callClaude(apiKey, systemPrompt, userMessage) {
   }
 }
 
-export async function callAgent(apiKey, codename, userMessage) {
+export async function callAgent(apiKey, codename, userMessage, showContext = '') {
   const agent = AGENTS[codename];
   if (!agent) return `Unknown agent: ${codename}`;
 
+  const systemWithShows = showContext
+    ? `${agent.systemPrompt}\n${showContext}`
+    : agent.systemPrompt;
+
   try {
-    return await callClaude(apiKey, agent.systemPrompt, userMessage);
+    return await callClaude(apiKey, systemWithShows, userMessage);
   } catch (error) {
     return `Error from ${codename}: ${error.message}`;
   }
 }
 
-export async function routeRequest(apiKey, userMessage) {
-  const routingPrompt = `${AGENTS.DISPATCH.systemPrompt}
+export async function routeRequest(apiKey, userMessage, showContext = '') {
+  const routingPrompt = `${AGENTS.DISPATCH.systemPrompt}${showContext}
 
 IMPORTANT: You must respond with ONLY a valid JSON object, no other text. The JSON must have these fields:
 - "assessment": string (1-2 sentence summary)
