@@ -1,10 +1,4 @@
 // Show data persistence via localStorage
-import * as pdfjsLib from 'pdfjs-dist';
-
-pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-  'pdfjs-dist/build/pdf.worker.mjs',
-  import.meta.url
-).toString();
 
 const STORAGE_KEY = 'heffron_shows';
 
@@ -60,19 +54,7 @@ export function formatShowsForAgents(shows) {
   return text;
 }
 
-export async function extractTextFromPDF(file) {
-  const arrayBuffer = await file.arrayBuffer();
-  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-  let text = '';
-  for (let i = 1; i <= pdf.numPages; i++) {
-    const page = await pdf.getPage(i);
-    const content = await page.getTextContent();
-    text += content.items.map(item => item.str).join(' ') + '\n';
-  }
-  return text;
-}
-
-const PARSE_PROMPT = `You are a data extraction tool. Parse the following text into a JSON array of show objects. Extract every show/performance you can find.
+const PARSE_PROMPT = `You are a data extraction tool. Parse the following into a JSON array of show objects. Extract every show/performance you can find.
 
 Each object must have these fields (use empty string "" if not found):
 - "date": YYYY-MM-DD format
@@ -87,7 +69,26 @@ Each object must have these fields (use empty string "" if not found):
 
 Respond with ONLY a valid JSON array. No other text.`;
 
-export async function parseShowsWithAI(apiKey, text) {
+export async function parseShowsWithAI(apiKey, content) {
+  // content can be a string (pasted text) or { type: 'file', base64, mediaType } for PDFs
+  let userContent;
+  if (typeof content === 'string') {
+    userContent = content;
+  } else {
+    // PDF or other file sent as document to Claude
+    userContent = [
+      {
+        type: 'document',
+        source: {
+          type: 'base64',
+          media_type: content.mediaType,
+          data: content.base64,
+        },
+      },
+      { type: 'text', text: 'Extract all show dates and details from this document.' },
+    ];
+  }
+
   const response = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
@@ -100,7 +101,7 @@ export async function parseShowsWithAI(apiKey, text) {
       model: 'claude-sonnet-4-20250514',
       max_tokens: 4096,
       system: PARSE_PROMPT,
-      messages: [{ role: 'user', content: text }],
+      messages: [{ role: 'user', content: userContent }],
     }),
   });
 
@@ -116,4 +117,16 @@ export async function parseShowsWithAI(apiKey, text) {
 
   const parsed = JSON.parse(jsonMatch[0]);
   return parsed.map(s => ({ ...s, id: Date.now() + Math.random() }));
+}
+
+export function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const base64 = reader.result.split(',')[1];
+      resolve(base64);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
 }

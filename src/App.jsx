@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { AGENTS, AGENT_LIST } from './agents';
 import { callAgent, routeRequest } from './api';
-import { loadShows, saveShows, formatShowsForAgents, extractTextFromPDF, parseShowsWithAI } from './shows';
+import { loadShows, saveShows, formatShowsForAgents, parseShowsWithAI, fileToBase64 } from './shows';
 import './App.css';
 
 const APP_PASSWORD = 'Norchester943';
@@ -112,14 +112,15 @@ function App() {
     if (!file || !apiKey) return;
     setImportStatus('Reading file...');
     try {
-      let text;
+      let content;
       if (file.type === 'application/pdf') {
-        text = await extractTextFromPDF(file);
+        const base64 = await fileToBase64(file);
+        content = { type: 'file', base64, mediaType: 'application/pdf' };
       } else {
-        text = await file.text();
+        content = await file.text();
       }
       setImportStatus('Parsing shows...');
-      const parsed = await parseShowsWithAI(apiKey, text);
+      const parsed = await parseShowsWithAI(apiKey, content);
       if (parsed.length === 0) {
         setImportStatus('No shows found in file.');
         return;
