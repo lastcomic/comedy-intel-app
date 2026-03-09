@@ -33,8 +33,14 @@ function App() {
   const [pipeline, setPipeline] = useState(null);
   const [activeAgents, setActiveAgents] = useState(new Set());
 
+  const [clock, setClock] = useState(new Date());
   const chatEndRef = useRef(null);
   const textareaRef = useRef(null);
+
+  useEffect(() => {
+    const timer = setInterval(() => setClock(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -51,6 +57,7 @@ function App() {
     setMessages(prev => [...prev, { ...msg, id: Date.now() + Math.random() }]);
   }, []);
 
+  // Recompute on every render so the timestamp is always current when agents are called
   const showContext = formatShowsForAgents(shows);
 
   const addShow = () => {
@@ -371,6 +378,7 @@ function App() {
     { label: '10 content ideas this week', agent: 'PULSE' },
     { label: 'Promo kit: Zanies Nashville June 7', agent: 'MARQUEE' },
     { label: 'Parse a deal: $7500 guarantee + SOB', agent: 'LEDGER' },
+    { label: 'What Delta flights should I book?', agent: 'JETSET' },
   ];
 
   const handleLogin = () => {
@@ -579,9 +587,15 @@ function App() {
               <div className="topbar-agent-desc">{currentAgent.description}</div>
             </div>
           </div>
-          <div className="topbar-status">
-            <div className={`status-dot ${isProcessing ? 'processing' : ''}`} />
-            {isProcessing ? 'Processing...' : 'Ready'}
+          <div className="topbar-right">
+            <div className="topbar-clock">
+              <div className="clock-date">{clock.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</div>
+              <div className="clock-time">{clock.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', second: '2-digit' })}</div>
+            </div>
+            <div className="topbar-status">
+              <div className={`status-dot ${isProcessing ? 'processing' : ''}`} />
+              {isProcessing ? 'Processing...' : 'Ready'}
+            </div>
           </div>
         </div>
 

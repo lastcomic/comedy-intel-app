@@ -155,6 +155,30 @@
   color: var(--text-secondary);
 }
 
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.topbar-clock {
+  text-align: right;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.clock-date {
+  font-size: 11px;
+  color: var(--text-secondary);
+  letter-spacing: 0.3px;
+}
+
+.clock-time {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: 0.5px;
+}
+
 .topbar-status {
   display: flex;
   align-items: center;

@@ -53,7 +53,7 @@ export async function routeRequest(apiKey, userMessage, showContext = '') {
 
 IMPORTANT: You must respond with ONLY a valid JSON object, no other text. The JSON must have these fields:
 - "assessment": string (1-2 sentence summary)
-- "agents": array of agent codenames to activate (from: LEDGER, GHOSTLIGHT, CLIPSHOT, BOOST, MARQUEE, FRONTDESK, GRID, PULSE)
+- "agents": array of agent codenames to activate (from: LEDGER, GHOSTLIGHT, CLIPSHOT, BOOST, MARQUEE, FRONTDESK, GRID, JETSET, PULSE)
 - "sequence": array of objects with "agent", "task", "depends_on" fields
 - "manual_tasks": array of strings (tasks that need human action)
 
@@ -117,6 +117,10 @@ function inferAgents(text) {
 
   if (lower.includes('corporate') || lower.includes('private') || lower.includes('booking') || lower.includes('outreach')) {
     agents.push('FRONTDESK');
+  }
+
+  if (lower.includes('flight') || lower.includes('travel') || lower.includes('delta') || lower.includes('fly') || lower.includes('airport') || lower.includes('hotel')) {
+    agents.push('JETSET');
   }
 
   if (lower.includes('trend') || lower.includes('idea') || lower.includes('content idea') || lower.includes('topic')) {

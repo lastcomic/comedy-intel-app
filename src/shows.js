@@ -26,12 +26,20 @@ export function formatShowsForAgents(shows) {
     .sort((a, b) => new Date(b.date) - new Date(a.date))
     .slice(0, 5);
 
-  let text = '\n\n--- JOHN\'S SHOW SCHEDULE ---\n';
+  const now = new Date();
+  const timestamp = now.toLocaleString('en-US', {
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+    hour: 'numeric', minute: '2-digit', timeZoneName: 'short'
+  });
+
+  let text = `\n\n--- JOHN'S SHOW SCHEDULE ---\n`;
+  text += `CURRENT DATE/TIME: ${timestamp}\n`;
 
   if (upcoming.length) {
     text += '\nUPCOMING SHOWS:\n';
     upcoming.forEach(s => {
-      text += `• ${s.date} — ${s.venue}, ${s.city}, ${s.state}`;
+      const daysUntil = Math.ceil((new Date(s.date) - now) / (1000 * 60 * 60 * 24));
+      text += `• ${s.date} (${daysUntil} days away) — ${s.venue}, ${s.city}, ${s.state}`;
       if (s.dealType) text += ` | Deal: ${s.dealType}`;
       if (s.guarantee) text += ` | Guarantee: $${s.guarantee}`;
       if (s.ticketLink) text += ` | Tickets: ${s.ticketLink}`;
