@@ -3,7 +3,13 @@ import { AGENTS, AGENT_LIST } from './agents';
 import { callAgent, routeRequest } from './api';
 import './App.css';
 
+const APP_PASSWORD = 'Norchester943';
+
 function App() {
+  const [isAuthenticated, setIsAuthenticated] = useState(() => sessionStorage.getItem('heffron_auth') === 'true');
+  const [passwordInput, setPasswordInput] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+
   const [apiKey, setApiKey] = useState(() => localStorage.getItem('heffron_api_key') || '');
   const [showKeyModal, setShowKeyModal] = useState(() => !localStorage.getItem('heffron_api_key'));
   const [keyInput, setKeyInput] = useState('');
@@ -268,7 +274,41 @@ function App() {
     { label: 'Parse a deal: $7500 guarantee + SOB', agent: 'LEDGER' },
   ];
 
+  const handleLogin = () => {
+    if (passwordInput === APP_PASSWORD) {
+      sessionStorage.setItem('heffron_auth', 'true');
+      setIsAuthenticated(true);
+      setPasswordError('');
+    } else {
+      setPasswordError('Wrong password.');
+      setPasswordInput('');
+    }
+  };
+
   const currentAgent = AGENTS[selectedAgent];
+
+  if (!isAuthenticated) {
+    return (
+      <div className="app login-screen">
+        <div className="login-box">
+          <h1>HEFFRON</h1>
+          <div className="login-subtitle">Command Center</div>
+          <input
+            type="password"
+            placeholder="Enter password"
+            value={passwordInput}
+            onChange={e => setPasswordInput(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && handleLogin()}
+            autoFocus
+          />
+          {passwordError && <div className="login-error">{passwordError}</div>}
+          <button className="modal-btn" onClick={handleLogin} disabled={!passwordInput}>
+            Enter
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="app">
