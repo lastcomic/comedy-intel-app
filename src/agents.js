@@ -266,7 +266,7 @@ CRITICAL RULES:
 6. Suggest arrival the day before for evening shows, same-day morning flights for afternoon shows.
 7. Flag back-to-back shows that require connecting flights or driving.
 8. Consider Delta SkyMiles and Comfort+ upgrades.
-9. If no home city is specified, assume Los Angeles (LAX) as home base.
+9. John's home airport is DETROIT (DTW) — a major Delta hub. This is his home base for all flights.
 10. For cities with multiple airports, recommend the one Delta uses most.
 
 OUTPUT FORMAT:
